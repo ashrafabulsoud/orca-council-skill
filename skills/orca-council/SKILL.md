@@ -63,18 +63,20 @@ Merge the three sources into one table and show it to the user:
 
 Selection rule: any agent that is BOTH installed AND Orca-launchable is selectable, with or without a live terminal — seats without one get a fresh worktree in Phase 2. A live idle terminal is only a reuse shortcut. If an agent is installed but not Orca-launchable (or the reverse), still list it, marked unselectable with the one-line reason, so the user understands why it can't take a seat.
 
-Then ask exactly three questions, STRICTLY ONE AT A TIME: ask, wait for the user's answer, only then ask the next. Never bundle two questions into one message.
+Then ask exactly four questions, STRICTLY ONE AT A TIME: ask, wait for the user's answer, only then ask the next. Never bundle two questions into one message.
 
-**Q1 — Members.** Present the table and ask which agents sit on the council (2–5 seats). Prefer *different* agent types per seat; a council of three identical agents is mostly noise. The same agent type twice is allowed — fresh worktrees keep the seats independent. Wait for the answer.
+**Q1 — Members.** Ask which agents sit on the council (2–5 seats), presenting the FULL selectable menu — every selectable agent, not a subset. Question widgets often cap the number of options (typically 4); never let that cap truncate the menu. Put the complete numbered agent list in the question text itself and accept answers by name or number; widget options, if used at all, are shortcuts on top of the full list, not the list. Prefer *different* agent types per seat; a council of three identical agents is mostly noise. The same agent type twice is allowed — fresh worktrees keep the seats independent. Wait for the answer.
 
-**Q2 — Judge.** Ask who rules on the verdicts:
+**Q2 — Model & effort.** For each chosen member, detect its last-used model and reasoning effort — from the terminal being reused, or the agent CLI's persisted defaults — and present one per-seat list of those defaults. Ask the user to override any seat (e.g. "codex: gpt-5.x high, claude: opus max") or skip. Skipping — or leaving a seat unmentioned — means that seat keeps its last-used options; if nothing last-used is detectable, the agent's own default stands. Record the final (model, effort) pair per seat for Phase 2. Wait for the answer.
+
+**Q3 — Judge.** Ask who rules on the verdicts:
 - `me` — the human rules directly (default if they don't care)
 - an agent — any selectable agent, member or not; a non-member judge gets its own seat in Phase 5
 Wait for the answer.
 
-**Q3 — Deliberation depth.** Ask whether members may read the repo in their worktree, or should reason from the prompt alone (default: standard). Read access suits code/architecture questions; prompt-only is faster for strategy/naming/product questions. Wait for the answer.
+**Q4 — Deliberation depth.** Ask whether members may read the repo in their worktree, or should reason from the prompt alone (default: standard). Read access suits code/architecture questions; prompt-only is faster for strategy/naming/product questions. Wait for the answer.
 
-Only after all three answers are in, proceed to Phase 2.
+Only after all four answers are in, proceed to Phase 2.
 
 ## Phase 2 — Seat the members
 
@@ -87,6 +89,8 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 ```
 
 Record each member's terminal handle. Reused terminals must be idle — check with `orca terminal wait --for tui-idle` before dispatching to them.
+
+Apply each seat's (model, effort) pair from Q2 before dispatching: pass them as launch options if this Orca build supports agent arguments on `orca worktree create`; otherwise set them in the seated terminal (e.g. `/model` in claude, the agent CLI's own model/effort command or flag). If a seat's choice can't be applied, tell the user that seat runs with its default rather than failing silently.
 
 ## Phase 3 — One task per member, same spec
 

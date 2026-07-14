@@ -48,7 +48,7 @@ Invoked with no arguments, it asks for the question first. On agents without sla
 ### What happens
 
 1. **Preflight** — verifies the Orca runtime and checks for stale council state
-2. **Roster** — builds the full agent menu (installed CLIs + Orca-launchable types + live terminals as reuse shortcuts), then asks three questions one at a time: members (2–5), judge (`me` or an agent), deliberation depth
+2. **Roster** — builds the full agent menu (installed CLIs + Orca-launchable types + live terminals as reuse shortcuts), then asks four questions one at a time: members (2–5) picked from the full menu (never truncated to a widget's option cap), model & effort per seat (skip = each agent's last-used options), judge (`me` or an agent), deliberation depth
 3. **Dispatch** — one tracked task per seat, identical spec, enforced verdict trailer:
    ```
    VERDICT: approve | reject | needs-changes | <option>

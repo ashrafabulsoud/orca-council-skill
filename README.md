@@ -19,7 +19,21 @@ npx skills add https://github.com/stablyai/orca --skill orchestration
 npx skills add https://github.com/ashrafabulsoud/orca-council-skill --skill orca-council
 ```
 
-Installs into your agent's skill directory (Claude Code, Codex, Cursor, etc.). To update after the repo changes, just re-run the same command.
+Installs into your agent's skill directory (Claude Code, Codex, Cursor, etc.).
+
+## Update
+
+Installed skills are copied, not symlinked — they don't pick up repo changes automatically. To get the latest version, re-run the install command:
+
+```bash
+npx skills add https://github.com/ashrafabulsoud/orca-council-skill --skill orca-council
+```
+
+Or update everything the `skills` CLI manages at once:
+
+```bash
+npx skills update
+```
 
 ## Usage
 

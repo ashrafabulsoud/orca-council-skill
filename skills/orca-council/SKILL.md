@@ -34,22 +34,47 @@ If stale `Council:` tasks exist, ask the user whether to proceed alongside them 
 
 ## Phase 1 — Roster
 
-Discover what's available and let the user choose. List existing terminals and their agents:
+Build the full agent menu first — the council is not limited to agents that already have live terminals. Gather three sources:
 
 ```bash
+# a) Live terminals (reuse shortcuts)
 orca terminal list --json
 orca worktree ps --json
+
+# b) Agent types Orca can launch
+orca worktree create --help
 ```
 
-Present the user with:
+Parse the accepted values of `--agent` from the help output; if this Orca build offers a dedicated listing command (check `orca --help` for something like `orca agent list --json`), prefer that.
 
-1. **Members** — which agents sit on the council (2–5). Show existing idle terminals as reuse candidates, and offer to spin up fresh worktrees for agents that aren't running (e.g. claude, codex, glm, cursor, droid — whatever `orca terminal list` and the user's installed agents support). Prefer *different* agent types per seat; a council of three identical agents is mostly noise. If the user picks the same agent type twice, that's fine — fresh worktrees keep them independent.
-2. **Judge** — one of:
-   - `me` — the human rules on the verdicts themselves (default if they don't care)
-   - an agent — you dispatch a judgment task after the votes are in
-3. **Deliberation depth** (optional, default: standard) — whether members may read the repo in their worktree, or should reason from the prompt alone. Read access makes sense for code/architecture questions; prompt-only is faster for strategy/naming/product questions.
+```bash
+# c) Agent CLIs installed on this machine
+for bin in claude codex grok cursor-agent gemini opencode amp droid goose aider qwen; do
+  command -v "$bin" >/dev/null 2>&1 && echo "$bin"
+done
+```
 
-Wait for the user's choices before creating anything.
+Extend the candidate list with anything the Orca help output names that isn't in it.
+
+Merge the three sources into one table and show it to the user:
+
+| Agent | Installed | Orca-launchable | Live terminal (state) |
+|---|---|---|---|
+
+Selection rule: any agent that is BOTH installed AND Orca-launchable is selectable, with or without a live terminal — seats without one get a fresh worktree in Phase 2. A live idle terminal is only a reuse shortcut. If an agent is installed but not Orca-launchable (or the reverse), still list it, marked unselectable with the one-line reason, so the user understands why it can't take a seat.
+
+Then ask exactly three questions, STRICTLY ONE AT A TIME: ask, wait for the user's answer, only then ask the next. Never bundle two questions into one message.
+
+**Q1 — Members.** Present the table and ask which agents sit on the council (2–5 seats). Prefer *different* agent types per seat; a council of three identical agents is mostly noise. The same agent type twice is allowed — fresh worktrees keep the seats independent. Wait for the answer.
+
+**Q2 — Judge.** Ask who rules on the verdicts:
+- `me` — the human rules directly (default if they don't care)
+- an agent — any selectable agent, member or not; a non-member judge gets its own seat in Phase 5
+Wait for the answer.
+
+**Q3 — Deliberation depth.** Ask whether members may read the repo in their worktree, or should reason from the prompt alone (default: standard). Read access suits code/architecture questions; prompt-only is faster for strategy/naming/product questions. Wait for the answer.
+
+Only after all three answers are in, proceed to Phase 2.
 
 ## Phase 2 — Seat the members
 

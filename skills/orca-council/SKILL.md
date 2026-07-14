@@ -37,7 +37,7 @@ If stale `Council:` tasks exist, ask the user whether to proceed alongside them 
 Build the full agent menu first — the council is not limited to agents that already have live terminals. Gather three sources:
 
 ```bash
-# a) Live terminals (reuse shortcuts)
+# a) Live terminals (context: which agents already run here)
 orca terminal list --json
 orca worktree ps --json
 
@@ -61,36 +61,43 @@ Merge the three sources into one table and show it to the user:
 | Agent | Installed | Orca-launchable | Live terminal (state) |
 |---|---|---|---|
 
-Selection rule: any agent that is BOTH installed AND Orca-launchable is selectable, with or without a live terminal — seats without one get a fresh worktree in Phase 2. A live idle terminal is only a reuse shortcut. If an agent is installed but not Orca-launchable (or the reverse), still list it, marked unselectable with the one-line reason, so the user understands why it can't take a seat.
+Selection rule: any agent that is BOTH installed AND Orca-launchable is selectable, with or without a live terminal — every seat gets its own tab in the single council worktree in Phase 2. A live terminal is context (proof the agent runs on this machine), never a seat: the council does not dispatch into terminals outside its own worktree. If an agent is installed but not Orca-launchable (or the reverse), still list it, marked unselectable with the one-line reason, so the user understands why it can't take a seat.
 
 Then ask exactly four questions, STRICTLY ONE AT A TIME: ask, wait for the user's answer, only then ask the next. Never bundle two questions into one message.
 
-**Q1 — Members.** Ask which agents sit on the council (2–5 seats), presenting the FULL selectable menu — every selectable agent, not a subset. Question widgets often cap the number of options (typically 4); never let that cap truncate the menu. Put the complete numbered agent list in the question text itself and accept answers by name or number; widget options, if used at all, are shortcuts on top of the full list, not the list. Prefer *different* agent types per seat; a council of three identical agents is mostly noise. The same agent type twice is allowed — fresh worktrees keep the seats independent. Wait for the answer.
+**Q1 — Members.** Ask which agents sit on the council (2–5 seats), presenting the FULL selectable menu — every selectable agent, not a subset. Question widgets often cap the number of options (typically 4); never let that cap truncate the menu. Put the complete numbered agent list in the question text itself and accept answers by name or number; widget options, if used at all, are shortcuts on top of the full list, not the list. Prefer *different* agent types per seat; a council of three identical agents is mostly noise. The same agent type twice is allowed — each seat is its own tab and session, so the seats stay independent. Wait for the answer.
 
-**Q2 — Model & effort.** For each chosen member, detect its last-used model and reasoning effort — from the terminal being reused, or the agent CLI's persisted defaults — and present one per-seat list of those defaults. Ask the user to override any seat (e.g. "codex: gpt-5.x high, claude: opus max") or skip. Skipping — or leaving a seat unmentioned — means that seat keeps its last-used options; if nothing last-used is detectable, the agent's own default stands. Record the final (model, effort) pair per seat for Phase 2. Wait for the answer.
+**Q2 — Model & effort.** For each chosen member, detect its last-used model and reasoning effort — from the agent's most recent live terminal if one exists, or the agent CLI's persisted defaults — and present one per-seat list of those defaults. Ask the user to override any seat (e.g. "codex: gpt-5.x high, claude: opus max") or skip. Skipping — or leaving a seat unmentioned — means that seat keeps its last-used options; if nothing last-used is detectable, the agent's own default stands. Record the final (model, effort) pair per seat for Phase 2. Wait for the answer.
 
 **Q3 — Judge.** Ask who rules on the verdicts:
 - `me` — the human rules directly (default if they don't care)
 - an agent — any selectable agent, member or not; a non-member judge gets its own seat in Phase 5
 Wait for the answer.
 
-**Q4 — Deliberation depth.** Ask whether members may read the repo in their worktree, or should reason from the prompt alone (default: standard). Read access suits code/architecture questions; prompt-only is faster for strategy/naming/product questions. Wait for the answer.
+**Q4 — Deliberation depth.** Ask whether members may read the repo checkout in the council worktree, or should reason from the prompt alone (default: standard). Read access suits code/architecture questions; prompt-only is faster for strategy/naming/product questions. Wait for the answer.
 
 Only after all four answers are in, proceed to Phase 2.
 
 ## Phase 2 — Seat the members
 
-For each member without an existing idle terminal:
+The entire council lives in ONE dedicated worktree — a child workspace of the coordinator's context — with one terminal tab per seat. Never create a worktree per seat, and never seat members in terminals outside the council worktree. One workspace card holds every seat, and cleanup is a single removal.
+
+Create the council worktree with member 1 in its first terminal:
 
 ```bash
-orca worktree create --name council-<agent>-<n> --agent <agent> --json
-orca terminal list --worktree id:<newWorktreeId> --json
+orca worktree create --name council-<short-topic> --agent <member-1> --parent-worktree active --json
+```
+
+Read member 1's handle from `result.agentTerminalHandle` (older runtimes: `result.startupTerminal.handle`). Then give every other seat its own tab in the same worktree:
+
+```bash
+orca terminal create --worktree name:council-<short-topic> --title "seat-<n>-<agent>" --command "<agent CLI>" --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 ```
 
-Record each member's terminal handle. Reused terminals must be idle — check with `orca terminal wait --for tui-idle` before dispatching to them.
+Record each seat's terminal handle, and title every tab (`--title` at create, `orca terminal rename` after) so seats are identifiable at a glance.
 
-Apply each seat's (model, effort) pair from Q2 before dispatching: pass them as launch options if this Orca build supports agent arguments on `orca worktree create`; otherwise set them in the seated terminal (e.g. `/model` in claude, the agent CLI's own model/effort command or flag). If a seat's choice can't be applied, tell the user that seat runs with its default rather than failing silently.
+Apply each seat's (model, effort) pair from Q2 before dispatching: bake it into the launch command when the agent CLI takes flags (e.g. `--command 'codex --model <model> -c model_reasoning_effort="<effort>"'`), otherwise set it in the seated terminal (e.g. `/model` in claude). If a seat's choice can't be applied, tell the user that seat runs with its default rather than failing silently.
 
 ## Phase 3 — One task per member, same spec
 
@@ -105,7 +112,7 @@ Context: <repo paths, constraints, links, or "none">
 
 Rules:
 - Form your own independent opinion. Do not hedge into "it depends" without committing.
-- <If read access: "You may inspect the repository in your worktree." / else: "Reason from this prompt only; do not modify files.">
+- <If read access: "You may inspect the repository in your working directory, read-only — other council members share this checkout." / else: "Reason from this prompt only; do not modify files.">
 - Do NOT make code changes unless the question explicitly asks for a prototype.
 
 Your worker_done body MUST end with exactly these three lines:
@@ -180,7 +187,7 @@ DISSENT WORTH NOTING: <the strongest losing argument, or "none">
 NEXT STEP: <one concrete action>
 ```
 
-Dispatch it to the judge terminal with `--inject`, then run the same `check --wait` loop for its `worker_done`.
+The judge's tab lives in the same council worktree — if the judge isn't already seated, create its tab with `orca terminal create` like any seat. Dispatch the task to the judge terminal with `--inject`, then run the same `check --wait` loop for its `worker_done`.
 
 ## Phase 6 — Report and cleanup
 
@@ -191,10 +198,10 @@ Deliver the final report to the user in chat:
 3. The judgment (RULING / KEY REASONING / DISSENT / NEXT STEP)
 4. Anything a member surfaced that the judge missed but seems material
 
-Then ask whether to keep or remove the council worktrees. Remove only on confirmation — worktrees may contain inspection notes worth keeping. Leave orchestration task records alone unless the user asks for cleanup; if they do, prefer `task-update --status` bookkeeping over `reset`.
+Then ask whether to keep or remove the council worktree. It is one workspace — removing it closes every seat tab with it. Remove only on confirmation — it may contain inspection notes worth keeping. Leave orchestration task records alone unless the user asks for cleanup; if they do, prefer `task-update --status` bookkeeping over `reset`.
 
 ## Failure notes
 
-- A member that changes files when it shouldn't: note it in the report; its worktree is isolated, so nothing leaked.
+- A member that changes files when it shouldn't: seats share the council checkout — run `git status` in the council worktree, note it in the report, and revert stray changes before they skew other members. The user's own working copy is untouched either way; the council worktree is a separate checkout.
 - Two `worker_done` from one seat: trust the one whose dispatchId matches the active dispatch.
 - Everything hopeless mid-run: `orca orchestration run-stop --json` does not apply (you are the coordinator, there is no managed run) — just stop dispatching, summarize partial votes, and let the user decide.
